@@ -27,6 +27,17 @@ export async function POST(req: NextRequest) {
       zlib: { level: 9 }
     })
 
+    // Collect chunks
+    const chunks: Buffer[] = []
+    
+    // Set up event listeners BEFORE finalizing
+    archive.on('data', (chunk: Buffer) => chunks.push(chunk))
+    
+    const archivePromise = new Promise<void>((resolve, reject) => {
+      archive.on('end', resolve)
+      archive.on('error', reject)
+    })
+
     // Add files to the archive
     Object.entries(files).forEach(([filename, content]) => {
       archive.append(content as string, { name: filename })
@@ -38,16 +49,11 @@ export async function POST(req: NextRequest) {
       { name: 'README.md' }
     )
 
+    // Finalize the archive
     await archive.finalize()
-
-    // Convert archive to buffer
-    const chunks: Buffer[] = []
-    archive.on('data', (chunk: Buffer) => chunks.push(chunk))
-
-    await new Promise((resolve, reject) => {
-      archive.on('end', resolve)
-      archive.on('error', reject)
-    })
+    
+    // Wait for archive to complete
+    await archivePromise
 
     const buffer = Buffer.concat(chunks)
     const base64 = buffer.toString('base64')

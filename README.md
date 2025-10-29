@@ -53,6 +53,8 @@ git clone https://github.com/khajaaijaz26/Spotify-Analysis.git
 cd Spotify-Analysis
 ```
 
+> **Note:** This repository was originally a Spotify analysis project and has been transformed into the AI Builder platform.
+
 ### 2. Install dependencies
 
 ```bash

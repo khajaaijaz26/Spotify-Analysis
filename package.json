@@ -1,12 +1,18 @@
 {
-  "name": "ai-platform",
-  "version": "0.1.0",
+  "name": "ai-builder",
+  "version": "1.0.0",
   "private": true,
+  "description": "AI-powered platform for building apps, websites, landing pages, and presentations",
+  "author": "khajaaijaz26",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -35,5 +41,9 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
