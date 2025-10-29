@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Editor from '@monaco-editor/react'
-import { FiPlay, FiDownload } from 'react-icons/fi'
+import { FiPlay, FiDownload, FiSave } from 'react-icons/fi'
 
 type FileMap = Record<string, string>
 
@@ -13,7 +13,10 @@ export default function CreatePage() {
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [projectType, setProjectType] = useState('website')
+  const [projectName, setProjectName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [files, setFiles] = useState<FileMap>({})
   const [selectedFile, setSelectedFile] = useState('')
   const [showPreview, setShowPreview] = useState(false)
@@ -53,6 +56,9 @@ export default function CreatePage() {
         setFiles(data.code)
         const firstFile = Object.keys(data.code)[0]
         setSelectedFile(firstFile)
+        if (!projectName) {
+          setProjectName(prompt.slice(0, 50))
+        }
       } else {
         alert('Failed to generate code: ' + data.error)
       }
@@ -70,20 +76,83 @@ export default function CreatePage() {
     }
   }
 
-  const handleDownload = () => {
-    // Create a simple text file with all code
-    let content = ''
-    Object.entries(files).forEach(([filename, code]) => {
-      content += `\n\n===== ${filename} =====\n\n${code}`
-    })
-    
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'project.txt'
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleSave = async () => {
+    if (!projectName.trim()) {
+      alert('Please enter a project name')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: projectName,
+          description: prompt,
+          type: projectType,
+          code: files,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert('Project saved successfully!')
+      } else {
+        alert('Failed to save project: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to save project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDownloadZip = async () => {
+    setDownloading(true)
+    try {
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files,
+          projectName: projectName || 'project',
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Convert base64 to blob and download
+        const byteCharacters = atob(data.zip)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        const blob = new Blob([byteArray], { type: 'application/zip' })
+        
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = data.filename
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        alert('Failed to create zip: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to download project')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const getLanguage = (filename: string) => {
@@ -104,6 +173,19 @@ export default function CreatePage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Create Your Project</h1>
           
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Project Name
+              </label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="My Awesome Project"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 What do you want to build?
@@ -157,7 +239,7 @@ export default function CreatePage() {
         {/* Editor Section */}
         {Object.keys(files).length > 0 && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+            <div className="border-b border-gray-200 p-4 flex items-center justify-between flex-wrap gap-4">
               <div className="flex gap-2 overflow-x-auto">
                 {Object.keys(files).map((filename) => (
                   <button
@@ -174,26 +256,53 @@ export default function CreatePage() {
                 ))}
               </div>
               
-              <div className="flex gap-2 ml-4">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setShowPreview(!showPreview)}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
                 >
                   <FiPlay className="mr-1" />
-                  Preview
+                  {showPreview ? 'Hide' : 'Show'} Preview
                 </button>
                 <button
-                  onClick={handleDownload}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:bg-gray-400"
                 >
-                  <FiDownload className="mr-1" />
-                  Download
+                  {saving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FiSave className="mr-1" />
+                      Save
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleDownloadZip}
+                  disabled={downloading}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center disabled:bg-gray-400"
+                >
+                  {downloading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <FiDownload className="mr-1" />
+                      Download ZIP
+                    </>
+                  )}
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
-              <div className="border-r border-gray-200">
+            <div className={`grid ${showPreview ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-0`}>
+              <div className={showPreview ? 'border-r border-gray-200' : ''}>
                 <Editor
                   height="600px"
                   language={getLanguage(selectedFile)}

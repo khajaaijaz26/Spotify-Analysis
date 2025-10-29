@@ -3,13 +3,46 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { FiPlus, FiFolder, FiClock, FiExternalLink } from 'react-icons/fi'
+
+interface Project {
+  id: string
+  name: string
+  description: string | null
+  type: string
+  updatedAt: string
+  createdAt: string
+  deployUrl?: string | null
+}
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
 
-  if (status === 'loading') {
+  useEffect(() => {
+    if (session?.user) {
+      fetchProjects()
+    }
+  }, [session])
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/projects')
+      const data = await response.json()
+      if (data.projects) {
+        setProjects(data.projects)
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (status === 'loading' || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -22,30 +55,20 @@ export default function DashboardPage() {
     return null
   }
 
-  // Mock projects data - in production, fetch from database
-  const projects = [
-    {
-      id: '1',
-      name: 'Portfolio Website',
-      type: 'website',
-      updatedAt: '2 hours ago',
-      thumbnail: null,
-    },
-    {
-      id: '2',
-      name: 'Product Landing Page',
-      type: 'landing-page',
-      updatedAt: '1 day ago',
-      thumbnail: null,
-    },
-    {
-      id: '3',
-      name: 'Admin Dashboard',
-      type: 'admin-panel',
-      updatedAt: '3 days ago',
-      thumbnail: null,
-    },
-  ]
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 60) return `${diffMins} minutes ago`
+    if (diffHours < 24) return `${diffHours} hours ago`
+    if (diffDays === 1) return '1 day ago'
+    if (diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString()
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -78,7 +101,13 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">This Month</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">2</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {projects.filter(p => {
+                    const date = new Date(p.createdAt)
+                    const now = new Date()
+                    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+                  }).length}
+                </p>
               </div>
               <FiClock className="h-10 w-10 text-green-600" />
             </div>
@@ -88,7 +117,9 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Deployed</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">1</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {projects.filter(p => p.deployUrl).length}
+                </p>
               </div>
               <FiExternalLink className="h-10 w-10 text-purple-600" />
             </div>
@@ -147,7 +178,7 @@ export default function DashboardPage() {
                       {project.type.replace('-', ' ')}
                     </p>
                     <p className="text-xs text-gray-500 mb-4">
-                      Updated {project.updatedAt}
+                      Updated {formatDate(project.updatedAt)}
                     </p>
                     <div className="flex gap-2">
                       <Link
